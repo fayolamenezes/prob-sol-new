@@ -54,9 +54,9 @@ uniform float uHover;
 
 varying vec2 vUv;
 
-float circle(vec2 st, float radius){
-  vec2 dist = st - floor(st) - 0.5;
-  return step(length(dist), radius);
+float square(vec2 st, float size){
+  vec2 dist = abs(st - floor(st) - 0.5);
+  return step(dist.x, size) * step(dist.y, size);
 }
 
 void main(){
@@ -70,32 +70,31 @@ void main(){
   float stripFalloff = smoothstep(0.45,0.0,vDist); 
   float stripMask = stripFalloff * uHover;
 
-  // Dot pattern across strip
-  vec2 st = vUv * 40.0;           // controls dot spacing
-  float dotMask = circle(st,0.1); // controls dot size
-  float dotPattern = 1.0 - dotMask;
+  // Square pattern across strip
+  vec2 st = vUv * 50.0;             // controls spacing
+  float squareMask = square(st, 0.15); // controls size
+  float dotPattern = 1.0 - squareMask;
 
   // Base strip color
   float baseIntensity = 0.25 * stripMask;
   vec3 stripColor = glowColor * baseIntensity;
 
-  // Apply dot mask to strip
+  // Apply square mask to strip
   stripColor *= dotPattern;
 
   // --- Bulge boost near mouse ---
   vec2 scaledOffset = (vUv - uMouse) / vec2(0.4,0.25);
   float dist = dot(scaledOffset, scaledOffset);
 
-  // Softer Gaussian for bulge (less concentrated in center)
   float bulgeBoost = exp(-dist * 2.0) * uHover * 0.6; 
 
-  // Blend bulge with smooth falloff
   stripColor += glowColor * bulgeBoost * (0.5 + 0.5 * dotPattern);
 
   vec3 color = baseColor + stripColor;
   gl_FragColor = vec4(color,1.0);
 }
 </script>
+
 
 <script>
 const scene = new THREE.Scene();
