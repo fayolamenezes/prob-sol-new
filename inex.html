@@ -67,12 +67,12 @@ void main(){
 
   // --- Horizontal strip intensity (only visible on hover) ---
   float vDist = abs(vUv.y - uMouse.y);
-  float stripFalloff = smoothstep(0.45,0.0,vDist); 
+  float stripFalloff = smoothstep(0.9,0.0,vDist); 
   float stripMask = stripFalloff * uHover;
 
   // Square pattern across strip
-  vec2 st = vUv * 50.0;             // controls spacing
-  float squareMask = square(st, 0.15); // controls size
+  vec2 st = vUv * 55.0;             // controls spacing
+  float squareMask = square(st, 0.18); // controls size
   float dotPattern = 1.0 - squareMask;
 
   // Base strip color
@@ -95,7 +95,6 @@ void main(){
 }
 </script>
 
-
 <script>
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight,0.1,100);
@@ -113,24 +112,28 @@ const uniforms = {
   uBulgeRadiusY:{value:0.25} 
 };
 
-const geometry = new THREE.PlaneGeometry(1,1.5,150,200);
+// --- Card ---
+const cardWidth = 1.7;
+const cardHeight = 0.8;
+const geometry = new THREE.PlaneGeometry(cardWidth, cardHeight, 150, 200);
 const material = new THREE.ShaderMaterial({
   vertexShader: document.getElementById("vertexShader").textContent,
   fragmentShader: document.getElementById("fragmentShader").textContent,
   uniforms,
   side: THREE.DoubleSide
 });
-
 const card = new THREE.Mesh(geometry,material);
 scene.add(card);
 
-// Border
-const borderGeometry = new THREE.PlaneGeometry(1.02,1.52);
-const borderMaterial = new THREE.MeshBasicMaterial({color:0x555555,side:THREE.DoubleSide});
-const border = new THREE.Mesh(borderGeometry,borderMaterial);
+// --- Border (1px outline using EdgesGeometry) ---
+const borderEdges = new THREE.EdgesGeometry(new THREE.PlaneGeometry(cardWidth, cardHeight));
+const borderMaterial = new THREE.LineBasicMaterial({ color: 0x555555, linewidth: 1 });
+const border = new THREE.LineSegments(borderEdges, borderMaterial);
 scene.add(border);
-card.position.z = 0.001;
 
+card.position.z = 0.001; // keep card above border
+
+// --- Hover logic ---
 let isHovering=false;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -150,6 +153,7 @@ document.addEventListener("mousemove",(e)=>{
   }
 });
 
+// --- Animation loop ---
 function animate(){
   requestAnimationFrame(animate);
   uniforms.uHover.value = THREE.MathUtils.lerp(uniforms.uHover.value,isHovering?1.0:0.0,0.1);
