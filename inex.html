@@ -35,12 +35,18 @@ void main(){
 
   vec2 offset = uv - uMouse;
 
-  // Gaussian-style soft falloff for geometry displacement
+  // Gaussian-style falloff
   vec2 scaledOffset = vec2(offset.x / uBulgeRadiusX, offset.y / uBulgeRadiusY);
   float dist = dot(scaledOffset, scaledOffset); 
   float bulgeFalloff = exp(-dist * 4.0); 
 
-  float bulge = uBulgeHeight * bulgeFalloff * uHover;
+  // Stronger edge fade: fade starts at margin, completely gone at edges
+  float margin = 0.1; // how far from edges the bulge starts fading
+  float edgeX = smoothstep(0.0, margin, uv.x) * smoothstep(0.0, margin, 1.0 - uv.x);
+  float edgeY = smoothstep(0.0, margin, uv.y) * smoothstep(0.0, margin, 1.0 - uv.y);
+  float edgeMask = pow(edgeX * edgeY, 3.0); // sharpen the fade
+
+  float bulge = uBulgeHeight * bulgeFalloff * uHover * edgeMask;
   newPosition.z += bulge;
 
   gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition,1.0);
@@ -65,27 +71,20 @@ void main(){
   vec3 baseColor = vec3(0.0);
   vec3 glowColor = vec3(0.85,0.35,0.15);
 
-  // --- Horizontal strip intensity (only visible on hover) ---
   float vDist = abs(vUv.y - uMouse.y);
   float stripFalloff = smoothstep(0.9,0.0,vDist); 
   float stripMask = stripFalloff * uHover;
 
-  // Square pattern across strip
-  vec2 st = vUv * 55.0;             // controls spacing
-  float squareMask = square(st, 0.18); // controls size
+  vec2 st = vUv * 55.0;            
+  float squareMask = square(st, 0.18); 
   float dotPattern = 1.0 - squareMask;
 
-  // Base strip color
   float baseIntensity = 0.25 * stripMask;
   vec3 stripColor = glowColor * baseIntensity;
-
-  // Apply square mask to strip
   stripColor *= dotPattern;
 
-  // --- Bulge boost near mouse ---
   vec2 scaledOffset = (vUv - uMouse) / vec2(0.4,0.25);
   float dist = dot(scaledOffset, scaledOffset);
-
   float bulgeBoost = exp(-dist * 2.0) * uHover * 0.6; 
 
   stripColor += glowColor * bulgeBoost * (0.5 + 0.5 * dotPattern);
@@ -109,7 +108,7 @@ const uniforms = {
   uHover:{value:0.0},
   uBulgeHeight:{value:0.4},   
   uBulgeRadiusX:{value:0.4},  
-  uBulgeRadiusY:{value:0.25} 
+  uBulgeRadiusY:{value:0.25}
 };
 
 // --- Card ---
@@ -125,13 +124,13 @@ const material = new THREE.ShaderMaterial({
 const card = new THREE.Mesh(geometry,material);
 scene.add(card);
 
-// --- Border (1px outline using EdgesGeometry) ---
+// --- Border ---
 const borderEdges = new THREE.EdgesGeometry(new THREE.PlaneGeometry(cardWidth, cardHeight));
 const borderMaterial = new THREE.LineBasicMaterial({ color: 0x555555, linewidth: 1 });
 const border = new THREE.LineSegments(borderEdges, borderMaterial);
 scene.add(border);
 
-card.position.z = 0.001; // keep card above border
+card.position.z = 0.001;
 
 // --- Hover logic ---
 let isHovering=false;
@@ -147,7 +146,8 @@ document.addEventListener("mousemove",(e)=>{
   const intersects = raycaster.intersectObject(card);
   if(intersects.length>0){
     isHovering = true;
-    uniforms.uMouse.value.copy(intersects[0].uv);
+    const uv = intersects[0].uv;
+    uniforms.uMouse.value.copy(uv);
   }else{
     isHovering = false;
   }
