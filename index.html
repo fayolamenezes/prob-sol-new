@@ -3,12 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cards Opening Horizontally</title>
+  <title>8 Shader Cards with Scroll + Hover</title>
   <style>
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
-      background: #000000;
+      background: #000;
       height: 300vh; /* enough scroll */
       display: flex;
       justify-content: center;
@@ -19,84 +18,197 @@
       display: flex;
       flex-direction: column;
       margin-top: 600px;
-      gap: 2x;
     }
-    .pair {
-      position: relative;
-      width: 1000px;
-      height: 180px;
-      overflow: visible;
-      display: flex;
-      justify-content: center; /* center horizontally */
-    }
-    .card.first {
-      position: relative;
-      width: 500px;
-      height: 180px;
-      background: #000000;
-      border: 2px solid #454545;
-      border-radius: 0;
-      box-shadow: none;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 1.5rem;
-      user-select: none;
-      z-index: 2;
-      margin: 0;
-      color: white;
-    }
-    .card.second {
-      position: absolute;
-      top: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 500px;
-      height: 180px;
-      background: #000000;
-      border: 2px solid #454545;
-      border-radius: 0;
-      box-shadow: none;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 1.5rem;
-      user-select: none;
-      z-index: 1;
-      color: white;
+.pair {
+  position: relative;
+  width: 1000px;
+  height: 180px;
+  overflow: visible;
+}
+
+.shader-card {
+  width: 500px;
+  height: 180px;
+  border: 2px solid #454545;
+  background: #000;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%); /* center both cards at start */
+}
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="pair" id="pair1">
-      <div class="card first">Card 1</div>
-      <div class="card second">Card 2</div>
+      <div class="shader-card"></div>
+      <div class="shader-card"></div>
     </div>
     <div class="pair" id="pair2">
-      <div class="card first">Card 3</div>
-      <div class="card second">Card 4</div>
+      <div class="shader-card"></div>
+      <div class="shader-card"></div>
     </div>
     <div class="pair" id="pair3">
-      <div class="card first">Card 5</div>
-      <div class="card second">Card 6</div>
+      <div class="shader-card"></div>
+      <div class="shader-card"></div>
     </div>
     <div class="pair" id="pair4">
-      <div class="card first">Card 7</div>
-      <div class="card second">Card 8</div>
+      <div class="shader-card"></div>
+      <div class="shader-card"></div>
     </div>
   </div>
 
+  <!-- GSAP -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  <!-- THREE.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js"></script>
+
+  <!-- Vertex Shader -->
+  <script id="vertexShader" type="x-shader/x-vertex">
+    uniform vec2 uMouse;
+    uniform float uHover;
+    uniform float uBulgeHeight;    
+    uniform float uBulgeRadiusX;   
+    uniform float uBulgeRadiusY;   
+
+    varying vec2 vUv;
+
+    void main(){
+      vUv = uv;
+      vec3 newPosition = position;
+
+      vec2 offset = uv - uMouse;
+      vec2 scaledOffset = vec2(offset.x / uBulgeRadiusX, offset.y / uBulgeRadiusY);
+      float dist = dot(scaledOffset, scaledOffset); 
+      float bulgeFalloff = exp(-dist * 4.0); 
+
+      float margin = 0.1;
+      float edgeX = smoothstep(0.0, margin, uv.x) * smoothstep(0.0, margin, 1.0 - uv.x);
+      float edgeY = smoothstep(0.0, margin, uv.y) * smoothstep(0.0, margin, 1.0 - uv.y);
+      float edgeMask = pow(edgeX * edgeY, 3.0);
+
+      float bulge = uBulgeHeight * bulgeFalloff * uHover * edgeMask;
+      newPosition.z += bulge;
+
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition,1.0);
+    }
+  </script>
+
+  <!-- Fragment Shader -->
+  <script id="fragmentShader" type="x-shader/x-fragment">
+    uniform vec2 uMouse;
+    uniform float uHover;
+
+    varying vec2 vUv;
+
+    float square(vec2 st, float size){
+      vec2 dist = abs(st - floor(st) - 0.5);
+      return step(dist.x, size) * step(dist.y, size);
+    }
+
+    void main(){
+      if(vUv.x<0.0||vUv.x>1.0||vUv.y<0.0||vUv.y>1.0) discard;
+
+      vec3 baseColor = vec3(0.0);
+      vec3 glowColor = vec3(0.85,0.35,0.15);
+
+      float vDist = abs(vUv.y - uMouse.y);
+      float stripFalloff = smoothstep(0.9,0.0,vDist); 
+      float stripMask = stripFalloff * uHover;
+
+      vec2 st = vUv * 55.0;            
+      float squareMask = square(st, 0.18); 
+      float dotPattern = 1.0 - squareMask;
+
+      float baseIntensity = 0.25 * stripMask;
+      vec3 stripColor = glowColor * baseIntensity;
+      stripColor *= dotPattern;
+
+      vec2 scaledOffset = (vUv - uMouse) / vec2(0.4,0.25);
+      float dist = dot(scaledOffset, scaledOffset);
+      float bulgeBoost = exp(-dist * 2.0) * uHover * 0.6; 
+
+      stripColor += glowColor * bulgeBoost * (0.5 + 0.5 * dotPattern);
+
+      vec3 color = baseColor + stripColor;
+      gl_FragColor = vec4(color,1.0);
+    }
+  </script>
+
   <script>
     gsap.registerPlugin(ScrollTrigger);
 
     const slideDistance = 245; // half card width
 
+    // Setup shader cards
+    document.querySelectorAll('.shader-card').forEach(initShaderCard);
+
+    function initShaderCard(container) {
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 100);
+      camera.position.z = 2;
+
+      const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      container.appendChild(renderer.domElement);
+
+      const uniforms = {
+        uMouse:{value:new THREE.Vector2(0.5,0.5)},
+        uHover:{value:0.0},
+        uBulgeHeight:{value:0.4},   
+        uBulgeRadiusX:{value:0.4},  
+        uBulgeRadiusY:{value:0.25}
+      };
+
+      const geometry = new THREE.PlaneGeometry(4.7, 3, 150, 200);
+      const material = new THREE.ShaderMaterial({
+        vertexShader: document.getElementById("vertexShader").textContent,
+        fragmentShader: document.getElementById("fragmentShader").textContent,
+        uniforms,
+        side: THREE.DoubleSide
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      let isHovering = false;
+
+      renderer.domElement.addEventListener("mousemove", e => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((e.clientX-rect.left)/rect.width)*2-1;
+        mouse.y = -((e.clientY-rect.top)/rect.height)*2+1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const hit = raycaster.intersectObject(mesh);
+        if(hit.length>0){
+          isHovering = true;
+          uniforms.uMouse.value.copy(hit[0].uv);
+        } else {
+          isHovering = false;
+        }
+      });
+
+      function animate(){
+        requestAnimationFrame(animate);
+        uniforms.uHover.value = THREE.MathUtils.lerp(uniforms.uHover.value,isHovering?1.0:0.0,0.1);
+        renderer.render(scene,camera);
+      }
+      animate();
+    }
+
+    // GSAP scroll opening
     document.querySelectorAll('.pair').forEach(pair => {
-      const first = pair.querySelector('.card.first');
-      const second = pair.querySelector('.card.second');
+      const first = pair.children[0];
+      const second = pair.children[1];
 
       gsap.timeline({
         scrollTrigger: {
@@ -104,7 +216,6 @@
           start: "top 80%",
           end: "bottom 60%",
           scrub: 0.8,
-          // markers: true,
         }
       })
       .to(first, { x: -slideDistance, ease: "power1.out" }, 0)
